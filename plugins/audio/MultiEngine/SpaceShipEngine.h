@@ -23,6 +23,7 @@ sha: 68ea2d5c5f6029027622d9e4d3c77006ccd7a55f856cd09167a3afb1a70aa121
 #include "helpers/math.h"
 
 #include <cmath>
+#include <cstdlib>
 
 class SpaceShipEngine : public Engine {
 protected:
@@ -148,8 +149,9 @@ public:
         glideCurrent = glideTarget;
         glideTarget = 50.0f * powf(2.0f, (note - 60 + basePitch.get()) / 12.0f);
 
+        // Random phase initialization to avoid click transients
         for (int i = 0; i < NUM_OSC; i++)
-            oscPhases[i] = 0.0f;
+            oscPhases[i] = ((float)rand() / RAND_MAX) * 2.0f * M_PI;
 
         lfoPhase = 0.0f;
     }

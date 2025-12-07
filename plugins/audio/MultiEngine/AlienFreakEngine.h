@@ -154,8 +154,9 @@ public:
         Engine::noteOn(note, _velocity);
         velocity = _velocity;
         baseFreq = 220.0f * powf(2.0f,(note-60)/12.0f);
+        // Random phase initialization to avoid click transients
         for(int i=0;i<NUM_OSC;i++){
-            oscPhases[i] = 0.0f;
+            oscPhases[i] = ((float)rand() / RAND_MAX) * 2.0f * M_PI;
         }
         lfoPhase = 0.0f;
     }

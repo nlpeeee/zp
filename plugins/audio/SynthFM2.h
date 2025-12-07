@@ -112,7 +112,7 @@ protected:
         operators[opIndex].envelop.setRelease(operators[opIndex].release.get());
     }
 
-    uint8_t baseNote = 60;
+    uint8_t baseNote = 69; // A4 = 440Hz, matching mainFreq default
     float velocity = 1.0f;
     // notePitchRatio is the pitch of the current playing note;
     float notePitchRatio = 1.0f;

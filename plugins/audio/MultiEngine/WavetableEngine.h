@@ -22,6 +22,7 @@ sha: 62280fca589ca6593abb2e6468d125e7fd2301b87e3bb808b87d7046096558e6
 #include "audio/MMfilter.h"
 #include "audio/MultiFx.h"
 #include "audio/Wavetable.h"
+#include "audio/EnvelopDrumAmp.h"
 #include "plugins/audio/utils/valMMfilterCutoff.h"
 
 class WavetableEngine : public Engine {
@@ -29,16 +30,45 @@ protected:
     MultiFx multiFx;
     Wavetable wavetable;
     MMfilter filter;
+    MMfilter antiAliasFilter;  // Pitch-tracking anti-alias filter
     FastWaveform lfo;
+    EnvelopDrumAmp envPitch; // For pitch punch at note start
 
     float velocity = 1.0f;
     float sampleIndexLfo = 0.0f;
+    float baseCutoff = 0.5f; // Store base cutoff for envelope modulation
+    float antiAliasCutoff = 1.0f;  // Calculated based on pitch
+    
+    // Wavetable frequency calculation
+    // sampleInc = targetFreq * sampleCount / sampleRate
+    // Middle C (261.63 Hz) at note 60 is the reference
+    static constexpr uint8_t baseNote = 60;
+    static constexpr float middleCFreq = 261.63f;
+    float freq = 1.0f;  // This becomes sampleInc for the wavetable
+    uint8_t freqNote = 60;
+    void setFreq(uint8_t note = 0) {
+        if (note == 0) note = freqNote;
+        freqNote = note;
+        // Calculate target frequency in Hz
+        float targetFreq = middleCFreq * pow(2.0f, ((note - baseNote + picth.get()) / 12.0f));
+        // Convert to sample increment based on actual wavetable size
+        freq = targetFreq * wavetable.sampleCount / props.sampleRate;
+        
+        // Anti-aliasing: reduce high frequencies for higher notes
+        // At note 60 (middle C): full bandwidth
+        // At note 96 (C7): heavily filtered
+        // This prevents harsh aliasing on high notes
+        float noteRatio = (float)(note - 36) / 60.0f;  // 0 at C2, 1 at C7
+        antiAliasCutoff = 1.0f - noteRatio * 0.7f;  // 1.0 at low notes, 0.3 at high notes
+        antiAliasCutoff = CLAMP(antiAliasCutoff, 0.15f, 1.0f);
+        antiAliasFilter.setCutoff(antiAliasCutoff);
+    }
 
 public:
     // --- 10 parameters ---
     Val& picth = val(0.0f, "PITCH", { .label = "Pitch", .type = VALUE_CENTERED, .min = -32, .max = 32 }, [&](auto p) {
         p.val.setFloat(p.value);
-        setBaseFreq(p.val.get());
+        setFreq(); // Update freq ratio when pitch changes
     });
 
     Val& lfoRate = val(1.0f, "LFO_RATE", { .label = "LFO Rate", .min = 0.1f, .max = 100.0f, .step = 0.1f, .floatingPoint = 1, .unit = "Hz" }, [&](auto p) {
@@ -59,7 +89,9 @@ public:
         p.val.setString(lfo.toString());
     });
 
-    Val& lfoFreq = val(0.0f, "LFO_FREQ_MOD", { .label = "Freq. Mod.", .type = VALUE_CENTERED, .min = -100.0f, .unit = "%" });
+    Val& lfoWaveMod = val(0.0f, "LFO_WAVE_MOD", { .label = "Wave Mod.", .unit = "%" });
+
+    Val& envFilterMod = val(50.0f, "ENV_FILTER_MOD", { .label = "Env>Filter", .unit = "%" });
 
     Val& wave = val(0, "WAVE", { .label = "Wave", VALUE_STRING }, [&](auto p) {
         p.val.setFloat(p.value);
@@ -76,8 +108,10 @@ public:
         p.val.setString(std::to_string((int)p.val.get()) + "/" + std::to_string(ZIC_WAVETABLE_WAVEFORMS_COUNT));
     });
 
-    Val& cutoff = val(0.0f, "CUTOFF", { .label = "LPF | HPF", .type = VALUE_CENTERED | VALUE_STRING, .min = -100.0, .max = 100.0 }, [&](auto p) {
+    Val& cutoff = val(50.0f, "CUTOFF", { .label = "LPF | HPF", .type = VALUE_CENTERED | VALUE_STRING, .min = -100.0, .max = 100.0 }, [&](auto p) {
         valMMfilterCutoff(p, filter);
+        // Store base cutoff for envelope modulation (convert from -100..100 to 0..1)
+        baseCutoff = (p.value + 100.0f) / 200.0f;
     });
 
     Val& resonance = val(0.0f, "RESONANCE", { .label = "Resonance", .unit = "%" }, [&](auto p) {
@@ -107,14 +141,42 @@ public:
             return;
         }
 
-        float modulatedFreq = baseFreq;
-        if (lfoFreq.pct() != 0.5f) {
-            modulatedFreq += (lfoFreq.pct() - 0.5f) * lfo.process();
-            if (modulatedFreq < 0.0f) {
-                modulatedFreq = 0.000001f;
+        // Pitch envelope for punch (subtle pitch bend at note start)
+        float pitchEnv = envPitch.next();
+        float pitchMod = 1.0f + pitchEnv * 0.02f; // Max 2% pitch bend
+
+        // LFO for wave modulation (much gentler range: max ~8 waveforms sweep)
+        float lfoVal = lfo.process();
+        // Scale to ±0.125 max (8/64 waveforms), controlled by Wave Mod amount
+        float waveMod = lfoWaveMod.pct() > 0.0f ? lfoVal * lfoWaveMod.pct() * 0.125f : 0.0f;
+
+        float modulatedFreq = freq * pitchMod;  // Use ratio-based freq, not Hz
+
+        float out = waveMod != 0.0f 
+            ? wavetable.sample(&wavetable.sampleIndex, modulatedFreq, waveMod)
+            : wavetable.sample(&wavetable.sampleIndex, modulatedFreq);
+
+        // Apply pitch-tracking anti-alias filter first (always on, reduces harshness)
+        out = antiAliasFilter.process(out);
+
+        // Envelope-to-filter modulation: filter tracks envelope
+        // Works with both LPF (positive cutoff) and HPF (negative cutoff)
+        float envFilterAmount = envFilterMod.pct();
+        if (envFilterAmount > 0.01f && cutoff.get() != 0.0f) {
+            // For LPF: filter opens (higher cutoff) on attack
+            // For HPF: filter opens (lower cutoff = less filtering) on attack
+            float envMod = envAmpVal * envFilterAmount;
+            float modCutoff;
+            if (cutoff.get() > 0.0f) {
+                // LPF mode: increase cutoff with envelope
+                modCutoff = baseCutoff + (1.0f - baseCutoff) * envMod;
+            } else {
+                // HPF mode: decrease cutoff intensity with envelope (let more through)
+                modCutoff = baseCutoff * (1.0f - envMod * 0.5f);
             }
+            filter.setCutoff(modCutoff);
         }
-        float out = wavetable.sample(&wavetable.sampleIndex, modulatedFreq);
+
         out = filter.process(out);
         out = out * envAmpVal * velocity;
         out = multiFx.apply(out, fxAmount.pct());
@@ -125,8 +187,9 @@ public:
     {
         Engine::noteOn(note, _velocity);
         velocity = _velocity;
-        setBaseFreq(picth.get(), note);
+        setFreq(note);  // Calculate ratio-based frequency
         wavetable.sampleIndex = 0;
         sampleIndexLfo = 0.0f;
+        envPitch.reset(props.sampleRate * 0.15f); // 150ms pitch envelope decay
     }
 };

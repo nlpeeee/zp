@@ -5,7 +5,7 @@ This code defines the structure and behavior for a specialized sound generator n
 
 The fundamental purpose is audio synthesis, carried out by layering multiple sawtooth waves. The process involves:
 
-1.  **Layered Generation:** The engine generates up to seven individual sawtooth waveforms simultaneously.
+1.  **Layered Generation:** The engine generates up to seven individual sawtooth waveforms simultaneously using band-limited wavetable oscillators.
 2.  **Detuning:** It slightly detunes these layers from one another (the "detune" parameter is crucial here) to create a wide, swirling sound.
 3.  **Mixing and Noise:** The layered waves are summed together, and an optional noise component can be mixed in.
 4.  **Filtering:** The combined signal passes through a specialized audio filter (`MMfilter`) controlled by user settings for cutoff frequency and resonance, shaping the overall timbre.
@@ -28,6 +28,7 @@ sha: 19d228c7ac4b4016a0d03a06c98fc8951a357f6a97c6716c18a725e29fd85948
 #include "plugins/audio/MultiEngine/Engine.h"
 #include "audio/MMfilter.h"
 #include "audio/MultiFx.h"
+#include "audio/WavetableGenerator2.h"
 #include "plugins/audio/utils/valMMfilterCutoff.h"
 #include <cmath>
 
@@ -40,7 +41,9 @@ protected:
 
     float velocity = 1.0f;
 
-    float phases[MAX_VOICES] = { 0.0f };
+    // Use wavetable generators for anti-aliased saws
+    WavetableGenerator osc[MAX_VOICES];
+    float sampleIndices[MAX_VOICES] = { 0.0f };
 
 public:
     // --- 10 parameters ---
@@ -77,7 +80,20 @@ public:
         : Engine(p, c, "SuperSaw")
         , multiFx(props.sampleRate, props.lookupTable)
         , multiFx2(props.sampleRate, props.lookupTable)
+        , osc {
+            WavetableGenerator(props.lookupTable, props.sampleRate),
+            WavetableGenerator(props.lookupTable, props.sampleRate),
+            WavetableGenerator(props.lookupTable, props.sampleRate),
+            WavetableGenerator(props.lookupTable, props.sampleRate),
+            WavetableGenerator(props.lookupTable, props.sampleRate),
+            WavetableGenerator(props.lookupTable, props.sampleRate),
+            WavetableGenerator(props.lookupTable, props.sampleRate)
+        }
     {
+        // Set all oscillators to Saw waveform
+        for (int i = 0; i < MAX_VOICES; ++i) {
+            osc[i].setType(WavetableGenerator::Type::Saw);
+        }
         initValues();
     }
 
@@ -91,19 +107,19 @@ public:
         }
 
         int numVoices = voices.get();
-        float detuneAmt = detune.pct() * 0.05f;
+        float detuneAmt = detune.pct() * 0.03f; // Max 3% detune (gentler than before)
 
         float sampleSum = 0.0f;
         for (int i = 0; i < numVoices; ++i) {
-            float det = ((float)i - numVoices / 2.0f) * detuneAmt;
-            float freq = baseFreq * (1.0f + det);
+            // Spread voices evenly around center, with center voice undetuned
+            float voicePos = (numVoices > 1) ? ((float)i / (numVoices - 1) - 0.5f) * 2.0f : 0.0f;
+            float det = voicePos * detuneAmt;
+            
+            // Calculate frequency and convert to ratio for wavetable (divide by 110)
+            float freq = (baseFreq * (1.0f + det)) / 110.0f;
 
-            float phaseInc = 2.0f * M_PI * freq / props.sampleRate;
-            phases[i] += phaseInc;
-            if (phases[i] > 2.0f * M_PI)
-                phases[i] -= 2.0f * M_PI;
-
-            sampleSum += (2.0f * (phases[i] / (2.0f * M_PI)) - 1.0f); // saw wave approximation
+            // Use wavetable oscillator for anti-aliased saw
+            sampleSum += osc[i].sample(&sampleIndices[i], freq);
         }
 
         float out = sampleSum / numVoices;
@@ -125,7 +141,10 @@ public:
         Engine::noteOn(note, _velocity);
         velocity = _velocity;
         setBaseFreq(body.get(), note);
-        for (int i = 0; i < MAX_VOICES; ++i)
-            phases[i] = 0.0f;
+        
+        // Randomize starting phases to avoid harsh transient click
+        for (int i = 0; i < MAX_VOICES; ++i) {
+            sampleIndices[i] = (float)rand() / RAND_MAX;
+        }
     }
 };

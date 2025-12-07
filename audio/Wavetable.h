@@ -33,7 +33,9 @@ protected:
     SF_INFO sfinfo;
     SNDFILE* file = NULL;
 
-    static const uint64_t bufferSize = ZIC_WAVETABLE_WAVEFORMS_COUNT * 2048;
+    // Buffer size: 64 waveforms × 8256 samples max per waveform = 528384 samples
+    // This handles files up to ~2.1MB (covers all standard wavetable formats)
+    static const uint64_t bufferSize = ZIC_WAVETABLE_WAVEFORMS_COUNT * 8256;
     uint64_t bufferSampleCount = 0;
     uint64_t maxSampleStart = -1;
     float bufferSamples[bufferSize];

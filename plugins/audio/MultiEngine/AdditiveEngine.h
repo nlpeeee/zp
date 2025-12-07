@@ -20,6 +20,8 @@ sha: 6d16ecb74b71ad6c5bfe2f836f199366b3a6bbfc3c682cc979bcff716b33647c
 #include "plugins/audio/MultiEngine/Engine.h"
 #include "audio/MultiFx.h"
 
+#include <cstdlib>
+
 class AdditiveEngine : public Engine {
 protected:
     static constexpr int MAX_PARTIALS = 8;
@@ -128,8 +130,9 @@ public:
         Engine::noteOn(note, _velocity);
         velocity = _velocity;
         setBaseFreq(body.get(), note);
+        // Random phase initialization to avoid click transients
         for (int i = 0; i < MAX_PARTIALS; i++) {
-            phases[i] = 0.0f;
+            phases[i] = ((float)rand() / RAND_MAX) * 2.0f * M_PI;
         }
         lfoPhase = 0.0f;
     }

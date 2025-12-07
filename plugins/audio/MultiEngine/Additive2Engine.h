@@ -33,6 +33,8 @@ sha: ccbf7151730fc3c13c1e77bbcf4effbd0a46775ebcf5ef4b1edb461172442708
 #include "audio/WavetableGenerator2.h"
 #include "plugins/audio/utils/valMMfilterCutoff.h"
 
+#include <cstdlib>
+
 class Additive2Engine : public Engine {
 protected:
     MultiFx multiFx;
@@ -161,7 +163,11 @@ public:
     {
         Engine::noteOn(note, _velocity);
         velocity = _velocity;
-        phase1 = phase2 = phase3 = phase4 = 0.0f;
+        // Random phase initialization to avoid click transients
+        phase1 = (float)rand() / RAND_MAX;
+        phase2 = (float)rand() / RAND_MAX;
+        phase3 = (float)rand() / RAND_MAX;
+        phase4 = (float)rand() / RAND_MAX;
         setBaseFreq(body.get(), note);
     }
 };
