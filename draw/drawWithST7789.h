@@ -136,11 +136,15 @@ public:
 
     void clear() override
     {
-        // Init buffer with background color
-        for (int i = 0; i < SCREEN_BUFFER_ROWS; i++) { // here we can do the whole buffer even if it is out of bound
-            for (int j = 0; j < SCREEN_BUFFER_COLS; j++) {
-                screenBuffer[i][j] = styles.colors.background;
-                cacheBuffer[i][j] = st7789.colorToU16(styles.colors.background);
+        // Pre-calculate the background color values once
+        Color bgColor = styles.colors.background;
+        uint16_t bgColorU16 = st7789.colorToU16(bgColor);
+        
+        // Init buffer with background color - only clear actual screen size, not entire buffer!
+        for (int i = 0; i < styles.screen.h; i++) {
+            for (int j = 0; j < styles.screen.w; j++) {
+                screenBuffer[i][j] = bgColor;
+                cacheBuffer[i][j] = bgColorU16;
             }
         }
         fullRendering = true;
