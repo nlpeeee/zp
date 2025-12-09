@@ -184,8 +184,10 @@ public:
             }
         }
 
+        // Bottom info bar
         draw.text({ relativePosition.x + 2, relativePosition.y + size.h - 10 },
             scaleNames[scaleIndex], 8, { textColor, .font = font });
+
         draw.text({ (int)(relativePosition.x + size.w * 0.5), relativePosition.y + size.h - 10 },
             "Oct:" + std::to_string(octave), 8, { textColor, .font = font });
     }

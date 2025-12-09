@@ -5,6 +5,7 @@ import { Rect } from '@/libs/nativeComponents/Rect';
 import { SequencerCard } from '@/libs/nativeComponents/SequencerCard';
 import { SequencerValue } from '@/libs/nativeComponents/SequencerValue';
 import { Text } from '@/libs/nativeComponents/Text';
+import { Value } from '@/libs/nativeComponents/Value';
 import { rgb } from '@/libs/ui';
 import {
     A1,
@@ -256,6 +257,19 @@ export function SeqView({ name, track, synthName, color, contextId, title, inclu
                         encoderId={enc2Seq.encoderId}
                         visibilityContext={row2}
                     />
+                    <Value
+                        bounds={[enc7Seq.bounds[0], enc7Seq.bounds[1], enc7Seq.bounds[2], enc7Seq.bounds[3]]}
+                        audioPlugin={`Sequencer`}
+                        track={track}
+                        param="STEP_COUNT"
+                        label="Steps"
+                        encoderId={enc3Seq.encoderId}
+                        barHeight={2}
+                        barColor="primary"
+                        alignLeft
+                        showLabelOverValue={2}
+                        visibilityContext={row2}
+                    />
                     {includeLength && (
                         <SequencerValue
                             {...enc7Seq}
@@ -266,7 +280,7 @@ export function SeqView({ name, track, synthName, color, contextId, title, inclu
                             fontLabel={'PoppinsLight_12'}
                             type={'STEP_LENGTH'}
                             barColor="primary"
-                            encoderId={enc3Seq.encoderId}
+                            encoderId={enc4Seq.encoderId}
                             visibilityContext={row2}
                         />
                     )}
@@ -328,6 +342,7 @@ export function SeqView({ name, track, synthName, color, contextId, title, inclu
                         contextId={contextId}
                         rowsSelection={2}
                         stepPerRow={4}
+                        maxSteps={64}
                         // rowsSelectionColor={"#28595f"}
                         gridKeys={[A1, A2, A3, A4, B1, B2, B3, B4]}
                         keys={[

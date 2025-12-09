@@ -25,12 +25,12 @@ sha: 2738f0f5c9f148e15e10c8124d7383433c1e8ae73ed394884e8c4d6cc7dd714f
 
 class Envelop {
 protected:
-    unsigned int index = -1;
+    unsigned int index = 0;
     unsigned int sampleCount = 0;
 
     void setNextPhase(unsigned int& sampleCountRef, unsigned int& indexRef)
     {
-        sampleCountRef = 0.0f;
+        sampleCountRef = 0;
         indexRef++;
     }
 
@@ -77,7 +77,7 @@ public:
             }
         }
 
-        float timeRatio = (float)sampleCount / (float)data[indexRef].sampleCount;
+        float timeRatio = (float)sampleCountRef / (float)data[indexRef].sampleCount;
         float env = (data[indexRef + 1].modulation - data[indexRef].modulation) * timeRatio + data[indexRef].modulation;
 
         // if (indexRef == 3) {
@@ -119,5 +119,40 @@ public:
     {
         indexRef = 0;
         sampleCountRef = 0;
+    }
+
+    // Return current envelope value without advancing state
+    float peek(unsigned int& sampleCountRef, unsigned int& indexRef)
+    {
+        if (indexRef >= data.size() - 1) {
+            return 0.0f;
+        }
+
+        if (isSustain(indexRef)) {
+            return data[indexRef].modulation;
+        }
+
+        unsigned int sc = sampleCountRef;
+        if (sc >= data[indexRef].sampleCount) {
+            // next phase would be handled in next() path; return the target of next phase
+            if (indexRef + 1 < data.size())
+                return data[indexRef + 1].modulation;
+            return 0.0f;
+        }
+
+        float timeRatio = (float)sc / (float)data[indexRef].sampleCount;
+        float env = (data[indexRef + 1].modulation - data[indexRef].modulation) * timeRatio + data[indexRef].modulation;
+        return env;
+    }
+
+    // Convenience methods for engine-level checks
+    bool isSilent(unsigned int& indexRef)
+    {
+        return indexRef >= data.size() - 1;
+    }
+
+    bool isSilent()
+    {
+        return index >= data.size() - 1;
     }
 };

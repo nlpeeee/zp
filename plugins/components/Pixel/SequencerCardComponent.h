@@ -359,9 +359,12 @@ public:
         // Show selected step
         if (contextId != 0) {
             int selectedStep = view->contextVar[contextId];
-            if (selectedStep < *stepCount) {
-                draw.rect(getStepPosition(selectedStep), { stepSize.w, stepSize.h - 1 /* need to substract 1 for whatever reason ^^, might be due to size */ }, { stepSelectedColor });
+            // Clamp selection to valid step range when stepCount decreases
+            if (selectedStep >= *stepCount) {
+                selectedStep = *stepCount - 1;
+                setContext(contextId, selectedStep);
             }
+            draw.rect(getStepPosition(selectedStep), { stepSize.w, stepSize.h - 1 /* need to substract 1 for whatever reason ^^, might be due to size */ }, { stepSelectedColor });
         }
     }
 

@@ -24,6 +24,7 @@ sha: 5fe2c9307b94ec530e5a412eb6d05cf86800c76f14990f1a22e0a0b89c240b10
 #pragma once
 
 #include "helpers/clamp.h"
+#include "log.h"
 #include "plugins/components/base/KeypadLayout.h"
 #include "plugins/components/component.h"
 #include "plugins/components/utils/color.h"
@@ -346,9 +347,10 @@ public:
     void resize() override
     {
         clipW = size.w / visibleCount;
+        logDebug("ClipsComponent::resize() size.w=%d size.h=%d visibleCount=%d clipW=%d", size.w, size.h, visibleCount, clipW);
     }
 
-    void render()
+    void render() override
     {
         draw.filledRect(relativePosition, size, { bgColor });
         int playingId = valClip ? valClip->get() : -1;

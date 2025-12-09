@@ -105,14 +105,21 @@ public:
         for (int i = 0; i < views.size(); i++) {
             if (views[i]->name == value) {
                 if (view != views[i] || force) {
+                    unsigned long t0 = getTicks();
                     if (view->saveForPrevious && previousView != view) {
                         previousView = view;
                     }
                     view = views[i];
+                    unsigned long t1 = getTicks();
                     for (int i = 0; i < 256; i++) {
                         view->onContext(i, contextVar[i]);
                     }
+                    unsigned long t2 = getTicks();
                     render();
+                    unsigned long t3 = getTicks();
+                    printf("[TIMING] setView(%s): setup=%lums context256=%lums render=%lums total=%lums\n",
+                           value.c_str(), t1-t0, t2-t1, t3-t2, t3-t0);
+                    fflush(stdout);
                 }
                 return;
             }
@@ -255,11 +262,14 @@ public:
 
     bool render()
     {
+        unsigned long r0 = getTicks();
         m.lock();
         if (!views.size()) {
             return false;
         }
+        unsigned long r1 = getTicks();
         draw->clear(); // <---- was slow, is it still slow with the new fix?
+        unsigned long r2 = getTicks();
         if (previousView != NULL) {
             for (auto& component : previousView->getComponents()) {
                 for (auto* value : component->values) {
@@ -267,11 +277,18 @@ public:
                 }
             }
         }
+        unsigned long r3 = getTicks();
         view->activate();
+        unsigned long r4 = getTicks();
         m.unlock();
 
         renderComponents();
+        unsigned long r5 = getTicks();
         drawMessage();
+        unsigned long r6 = getTicks();
+        printf("[TIMING] render(): lock=%lums clear=%lums prevCallbacks=%lums activate=%lums renderComp=%lums drawMsg=%lums\n",
+               r1-r0, r2-r1, r3-r2, r4-r3, r5-r4, r6-r5);
+        fflush(stdout);
         return true;
     }
 

@@ -29,8 +29,8 @@ sha: 6c1c24835a41a83bec4f60544bb5efade0a49bbf07b0d6cfb09cbd8e1fe36aa0
 
 #include <vector>
 
-#include "./utils/Wavetable.h"
-#include "./utils/WavetableGenerator.h"
+#include "../../audio/Wavetable.h"
+#include "../../audio/WavetableGenerator.h"
 #include "audioPlugin.h"
 #include "mapping.h"
 #include "audio/EnvelopDrumAmp.h"

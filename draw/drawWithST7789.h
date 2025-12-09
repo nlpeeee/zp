@@ -94,6 +94,7 @@ public:
         spi.setSpeed(20000);
 #endif
 
+        logDebug("ST7789 init with screen.w=%d, screen.h=%d", styles.screen.w, styles.screen.h);
         st7789.init(styles.screen.w, styles.screen.h);
         usleep(10 * 1000); // Delay a bit before restoring CLK, or otherwise this has been observed to cause the display not init if done back to back after the clear operation above.
 
@@ -104,7 +105,7 @@ public:
 #endif
         clear();
 
-        logDebug("ST7789 initialized.");
+        logDebug("ST7789 initialized with dimensions w=%d, h=%d", styles.screen.w, styles.screen.h);
     }
 
     void render() override
@@ -112,6 +113,22 @@ public:
         if (fullRendering) {
             fullRender();
             return;
+        }
+
+        // DEBUG: Draw red border around screen edges to verify dimensions
+        static bool debugBorderDrawn = false;
+        if (!debugBorderDrawn) {
+            Color red = { 255, 0, 0, 255 };
+            for (int x = 0; x < styles.screen.w; x++) {
+                screenBuffer[0][x] = red;                      // Top edge
+                screenBuffer[styles.screen.h - 1][x] = red;    // Bottom edge
+            }
+            for (int y = 0; y < styles.screen.h; y++) {
+                screenBuffer[y][0] = red;                      // Left edge
+                screenBuffer[y][styles.screen.w - 1] = red;    // Right edge
+            }
+            logDebug("DEBUG: Drew red border at screen edges w=%d h=%d", styles.screen.w, styles.screen.h);
+            debugBorderDrawn = true;
         }
 
         uint16_t pixels[SCREEN_BUFFER_COLS];
@@ -136,15 +153,14 @@ public:
 
     void clear() override
     {
-        // Pre-calculate the background color values once
-        Color bgColor = styles.colors.background;
-        uint16_t bgColorU16 = st7789.colorToU16(bgColor);
-        
-        // Init buffer with background color - only clear actual screen size, not entire buffer!
-        for (int i = 0; i < styles.screen.h; i++) {
-            for (int j = 0; j < styles.screen.w; j++) {
-                screenBuffer[i][j] = bgColor;
-                cacheBuffer[i][j] = bgColorU16;
+        // Init buffer with background color
+        // Only clear the actual screen area, not the full 4096x4096 buffer
+        // Buffer is [row][col] = [y][x], so iterate height then width
+        uint16_t bgColor16 = st7789.colorToU16(styles.colors.background);
+        for (int y = 0; y < styles.screen.h; y++) {
+            for (int x = 0; x < styles.screen.w; x++) {
+                screenBuffer[y][x] = styles.colors.background;
+                cacheBuffer[y][x] = bgColor16;
             }
         }
         fullRendering = true;

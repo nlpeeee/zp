@@ -27,8 +27,10 @@ import { ControllerColors, KeypadLayout, VisibilityContext } from './component';
 
 export const KnobAction = (
     props: {
-        action: string;
+        action?: string;
         action2?: string;
+        actionRight?: string;
+        actionLeft?: string;
         encoderId?: number;
         visibilityContext?: VisibilityContext[];
         visibilityGroup?: number;

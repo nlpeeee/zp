@@ -89,6 +89,12 @@ protected:
         operators[opIndex].stepIncrement = props.lookupTable->size * operators[opIndex].pitchedFreq / props.sampleRate;
     }
 
+    void updateOperatorFrequency(FMoperator& op)
+    {
+        op.pitchedFreq = op.freq.get() * pitchRatio;
+        op.stepIncrement = props.lookupTable->size * op.pitchedFreq / props.sampleRate;
+    }
+
     void setAttack(float ms, unsigned int opIndex)
     {
         operators[opIndex].attack.setFloat(ms);
@@ -167,25 +173,32 @@ public:
 
         for (int i = 0; i < ZIC_FM_OPS_COUNT; i++) {
             operators[i].mod = 0.0f;
+            operators[i].feedbackMod = 0.0f; // clear feedback per frame
         }
 
         for (int i = 0; i < ZIC_FM_OPS_COUNT; i++) {
             FMoperator& op = operators[i];
             float env = op.envelop.next();
             if (env > 0.0f) {
-                if (op.mod == 0.0 && op.feedbackMod == 0.0) {
+                if (op.mod == 0.0f && op.feedbackMod == 0.0f) {
                     op.index += op.stepIncrement;
                 } else {
-                    float freq = op.pitchedFreq + op.pitchedFreq * op.mod + op.pitchedFreq * op.feedbackMod;
-                    float inc = op.stepIncrement + props.lookupTable->size * freq / props.sampleRate; // TODO optimize with precomputing: props.lookupTable->size * op.freq.get() / props.sampleRate
+                    float freq = op.pitchedFreq * (1.0f + op.mod + op.feedbackMod);
+                    float inc = props.lookupTable->size * freq / props.sampleRate;
                     op.index += inc;
-                    // printf("[op %d] freq: %f, inc: %f, mod %f \n", i, freq, inc, mod);
-                    // mod = 0.0f;
                 }
                 while (op.index >= props.lookupTable->size) {
                     op.index -= props.lookupTable->size;
                 }
-                float s = props.lookupTable->sine[(int)op.index] * env;
+                int idx = (int)op.index;
+                float frac = op.index - (float)idx;
+                int nextIdx = idx + 1;
+                if (nextIdx >= (int)props.lookupTable->size)
+                    nextIdx -= props.lookupTable->size;
+                float a = props.lookupTable->sine[idx];
+                float b = props.lookupTable->sine[nextIdx];
+                float val = a * (1.0f - frac) + b * frac;
+                float s = val * env;
 
                 if (op.feedback.get() > 0.0f) {
                     op.feedbackMod = s * op.feedback.pct();
@@ -201,11 +214,7 @@ public:
                         if (algorithm[(uint8_t)(algo.get() - 1)][i][j]) {
                             isMod = true;
                             // j + 1 because the first operator doesnt receive modulation
-                            if (operators[j + 1].mod == 0.0f) {
-                                operators[j + 1].mod = s;
-                            } else {
-                                operators[j + 1].mod *= s;
-                            }
+                            operators[j + 1].mod += s; // use additive modulation accumulation
                         }
                     }
                     if (!isMod) {
@@ -224,10 +233,12 @@ public:
         velocity = _velocity;
         pitchRatio = pow(2.0f, (note - baseNote) / 12.0f);
         for (int i = 0; i < ZIC_FM_OPS_COUNT; i++) {
-            operators[i].envelop.reset();
-            operators[i].index = 0.0f;
-            operators[i].pitchedFreq = operators[i].freq.get() * pitchRatio;
-            operators[i].stepIncrement = props.lookupTable->size * operators[i].pitchedFreq / props.sampleRate;
+            // Safe legato: only reset envelope/phase if operator is silent
+            if (operators[i].envelop.isSilent()) {
+                operators[i].envelop.reset();
+                operators[i].index = 0.0f;
+            }
+            updateOperatorFrequency(operators[i]);
         }
     }
 

@@ -11,6 +11,8 @@ The core function of this component is to translate the turning motion of a spec
 
 3.  **Execution:** The module continuously monitors the specified knob. If the knob is rotated and the component is currently active, it instantly triggers the assigned primary action. If a secondary action was also configured, that is executed immediately afterward. This setup efficiently links physical user input directly to functional software operations.
 
+4.  **Direction-based Actions:** Optionally, `actionRight` and `actionLeft` can be specified to trigger different actions based on rotation direction.
+
 sha: a30d0f5e3ecd7a60e7b78c99141f68439941d748a939f6162de0fba5221a3779 
 */
 #pragma once
@@ -42,6 +44,39 @@ protected:
         .pressedTime = 0
     };
 
+    // Direction-based actions
+    KeypadLayout::KeyMap fakeKeymapRight = {
+        .controller = nullptr,
+        .controllerId = 0,
+        .key = 0,
+        .action = nullptr,
+        .action2 = nullptr,
+        .useContext = false,
+        .contextId = 0,
+        .contextValue = 0.0f,
+        .multipleKeyHandler = false,
+        .getColor = nullptr,
+        .isLongPress = false,
+        .pressedTime = 0
+    };
+
+    KeypadLayout::KeyMap fakeKeymapLeft = {
+        .controller = nullptr,
+        .controllerId = 0,
+        .key = 0,
+        .action = nullptr,
+        .action2 = nullptr,
+        .useContext = false,
+        .contextId = 0,
+        .contextValue = 0.0f,
+        .multipleKeyHandler = false,
+        .getColor = nullptr,
+        .isLongPress = false,
+        .pressedTime = 0
+    };
+
+    bool useDirectionActions = false;
+
 public:
     KnobActionComponent(ComponentInterface::Props props)
         : Component(props)
@@ -50,7 +85,21 @@ public:
 
         encoderId = config.value("encoderId", encoderId);
 
-        if (config.contains("action")) {
+        // Check for direction-based actions first
+        if (config.contains("actionRight") || config.contains("actionLeft")) {
+            useDirectionActions = true;
+            
+            if (config.contains("actionRight")) {
+                std::string actionStr = config["actionRight"].get<std::string>();
+                fakeKeymapRight.action = keypadLayout.getAction(actionStr);
+            }
+            
+            if (config.contains("actionLeft")) {
+                std::string actionStr = config["actionLeft"].get<std::string>();
+                fakeKeymapLeft.action = keypadLayout.getAction(actionStr);
+            }
+        } else if (config.contains("action")) {
+            // Original behavior: action fires on any turn
             std::string actionStr = config["action"].get<std::string>();
             fakeKeymap.action = keypadLayout.getAction(actionStr);
         } else {
@@ -65,10 +114,31 @@ public:
 
     void onEncoder(int8_t id, int8_t direction)
     {
-        if (isVisible() && id == encoderId && fakeKeymap.action != nullptr) {
-            fakeKeymap.action(fakeKeymap);
-            if (fakeKeymap.action2 != nullptr) {
-                fakeKeymap.action2(fakeKeymap);
+        logDebug("KnobAction::onEncoder id=%d encoderId=%d dir=%d visible=%d useDir=%d", 
+                 id, encoderId, direction, isVisible(), useDirectionActions);
+        
+        if (!isVisible() || id != encoderId) {
+            return;
+        }
+        
+        if (useDirectionActions) {
+            // Direction-based actions
+            logDebug("KnobAction direction action: dir=%d rightAction=%p leftAction=%p",
+                     direction, (void*)fakeKeymapRight.action, (void*)fakeKeymapLeft.action);
+            if (direction > 0 && fakeKeymapRight.action != nullptr) {
+                logDebug("KnobAction: executing RIGHT action");
+                fakeKeymapRight.action(fakeKeymapRight);
+            } else if (direction < 0 && fakeKeymapLeft.action != nullptr) {
+                logDebug("KnobAction: executing LEFT action");
+                fakeKeymapLeft.action(fakeKeymapLeft);
+            }
+        } else {
+            // Original behavior
+            if (fakeKeymap.action != nullptr) {
+                fakeKeymap.action(fakeKeymap);
+                if (fakeKeymap.action2 != nullptr) {
+                    fakeKeymap.action2(fakeKeymap);
+                }
             }
         }
     }

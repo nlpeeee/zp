@@ -28,8 +28,8 @@ sha: b9e4ef7c9fc8113dddea03893f3c6bc27805409b5baf3769d687d6c7a48e9c30
 */
 #pragma once
 
-#include "./utils/FastWaveform.h"
-#include "./utils/Wavetable.h"
+#include "../../audio/FastWaveform.h"
+#include "../../audio/Wavetable.h"
 #include "audioPlugin.h"
 #include "helpers/clamp.h"
 #include "mapping.h"

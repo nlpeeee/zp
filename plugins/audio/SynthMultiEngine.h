@@ -22,6 +22,7 @@ sha: bc9a9247921a8db2cec18e43d82ce4598ba18d41834a0c2eb78112ec76b762cd
 #pragma once
 
 #include "plugins/audio/MultiEngine.h"
+#include "helpers/getTicks.h"  // For timing measurement
 
 // Synth
 #include "plugins/audio/MultiEngine/Additive2Engine.h"
@@ -30,6 +31,7 @@ sha: bc9a9247921a8db2cec18e43d82ce4598ba18d41834a0c2eb78112ec76b762cd
 #include "plugins/audio/MultiEngine/FmEngine.h"
 #include "plugins/audio/MultiEngine/SpaceShipEngine.h"
 #include "plugins/audio/MultiEngine/StringEngine.h"
+#include "plugins/audio/MultiEngine/ChordEngine.h"
 #include "plugins/audio/MultiEngine/SuperSawEngine.h"
 #ifndef SKIP_SNDFILE
 #include "plugins/audio/MultiEngine/Wavetable2Engine.h"
@@ -78,6 +80,7 @@ protected:
     SpaceShipEngine spaceShipEngine;
     BassEngine bassEngine;
     StringEngine stringEngine;
+    ChordEngine chordEngine;
 #ifndef SKIP_SNDFILE
     WavetableEngine wavetableEngine;
     Wavetable2Engine wavetable2Engine;
@@ -86,10 +89,10 @@ protected:
     static const int VALUE_COUNT = 12;
 #ifndef SKIP_SNDFILE
     static const int DRUMS_ENGINES_COUNT = 9;
-    static const int SYNTH_ENGINES_COUNT = 9;
+    static const int SYNTH_ENGINES_COUNT = 10;
 #else
     static const int DRUMS_ENGINES_COUNT = 8;
-    static const int SYNTH_ENGINES_COUNT = 7;
+    static const int SYNTH_ENGINES_COUNT = 8;
 #endif
     static const int ENGINES_COUNT = DRUMS_ENGINES_COUNT + SYNTH_ENGINES_COUNT;
     MultiEngine* engines[ENGINES_COUNT] = {
@@ -114,10 +117,11 @@ protected:
         &spaceShipEngine,
         &bassEngine,
         &stringEngine,
-#ifndef SKIP_SNDFILE
+        &chordEngine,
+    #ifndef SKIP_SNDFILE
         &wavetableEngine,
         &wavetable2Engine,
-#endif
+    #endif
     };
     MultiEngine* selectedEngine = engines[0];
 
@@ -164,16 +168,27 @@ public:
 
     /*md - `ENGINE` select the drum engine. */
     Val& engine = val(0, "ENGINE", { .label = "Engine", .type = VALUE_STRING, .min = 0, .max = SynthMultiEngine::ENGINES_COUNT - 1, .unit = "Drum", .incType = INC_ONE_BY_ONE }, [&](auto p) {
+        unsigned long t0 = getTicks();
         p.val.setFloat(p.value);
         int index = (int)p.val.get();
+        if (selectedEngine == engines[index]) {
+            // Engine unchanged, skip expensive re-initialization
+            return;
+        }
         selectedEngine = engines[index];
+        unsigned long t1 = getTicks();
         p.val.setString(selectedEngine->name);
         selectedEngine->initValues();
+        unsigned long t2 = getTicks();
 
         p.val.props().unit = p.val.get() < DRUMS_ENGINES_COUNT ? "Drum" : "Synth";
 
         // loop through values and update their type
         copyValues();
+        unsigned long t3 = getTicks();
+        printf("[TIMING] Engine switch: select=%lums initValues=%lums copyValues=%lums total=%lums\n", 
+               t1-t0, t2-t1, t3-t2, t3-t0);
+        fflush(stdout);
     });
 
     struct ValueMap {
@@ -216,6 +231,7 @@ public:
         , spaceShipEngine(props, config)
         , bassEngine(props, config)
         , stringEngine(props, config)
+        , chordEngine(props, config)
 #ifndef SKIP_SNDFILE
         , wavetableEngine(props, config)
         , wavetable2Engine(props, config)
@@ -223,9 +239,26 @@ public:
     {
         initValues({ &engine });
 
-        for (int i = 0; i < VALUE_COUNT; i++) {
+        // Ensure each engine knows how to update the shared VAL_x values
+        // (use ENGINES_COUNT, not VALUE_COUNT). VALUE_COUNT is how many
+        // UI values we expose, whereas ENGINES_COUNT is how many engines
+        // we have.
+        for (int i = 0; i < ENGINES_COUNT; i++) {
             engines[i]->setValFn = setVal;
         }
+
+        // Initialize the engine Val so UI components have the engine
+        // name visible immediately when the plugin is created.
+        // We intentionally skipped the engine in initValues earlier;
+        // calling set here will invoke the engine callback which will
+        // set the string, unit and copy engine-specific values.
+        engine.set((float)0);
+
+        // Available engines are logged at debug level, not info, to
+        // avoid flooding output on every plugin instantiation.
+        // for (int i = 0; i < ENGINES_COUNT; ++i) {
+        //     logDebug("SynthMultiEngine: engine[%d] = %s", i, engines[i]->name.c_str());
+        // }
     }
 
     void sample(float* buf) override

@@ -23,7 +23,7 @@ sha: ec8fb590ad6631595717f580940ca53f686ea98659260c45d9757f6135d2c768
 */
 #pragma once
 
-#include "../audioPlugin.h"
+#include "plugins/audio/audioPlugin.h"
 #include "filter.h"
 
 #include <math.h> // fabs

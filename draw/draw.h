@@ -376,9 +376,10 @@ public:
     void clear() override
     {
         // Init buffer with background color
-        for (int i = 0; i < screenSize.w; i++) { // here we can do the whole buffer even if it is out of bound
-            for (int j = 0; j < screenSize.h; j++) {
-                screenBuffer[i][j] = styles.colors.background;
+        // Buffer is [row][col] = [y][x], so iterate y (height) then x (width)
+        for (int y = 0; y < screenSize.h; y++) {
+            for (int x = 0; x < screenSize.w; x++) {
+                screenBuffer[y][x] = styles.colors.background;
             }
         }
     }
@@ -1043,6 +1044,8 @@ public:
                 styles.screen.h = config["screenSize"]["height"].get<int>();
                 screenSizeOrginal = styles.screen;
                 screenSize = styles.screen;
+                logDebug("Draw::config screenSize: w=%d h=%d, screenSizeOrginal: w=%d h=%d, styles.screen: w=%d h=%d",
+                         screenSize.w, screenSize.h, screenSizeOrginal.w, screenSizeOrginal.h, styles.screen.w, styles.screen.h);
             }
         } catch (const std::exception& e) {
             logError("screen config: %s", e.what());

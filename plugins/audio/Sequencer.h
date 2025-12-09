@@ -170,7 +170,7 @@ public:
     Play/Stop will answer to global event. However, you may want to the sequencer to not listen to those events or to only start to play on the next sequence iteration. */
     Val& status = val(1.0f, "STATUS", { "Status", VALUE_STRING, .max = 2 }, [&](auto p) { setStatus(p.value); });
 
-    Val& stepCountVal = val(DEFAULT_MAX_STEPS, "STEP_COUNT", { "Step Count", VALUE_BASIC, .min = 1, .max = 2048 }, [&](auto p) { 
+    Val& stepCountVal = val(DEFAULT_MAX_STEPS, "STEP_COUNT", { "Step Count", VALUE_BASIC, .min = 4, .max = 64, .step = 4.0f }, [&](auto p) { 
         p.val.setFloat(p.value);
         stepCount = p.val.get();
      });
@@ -218,7 +218,10 @@ public:
             // int index = playingLoops.get() - 1; // oldest in first position
             int index = (recordedLoops.size() - 1) - (playingLoops.get() - 1); // newest in first position
             if (index < recordedLoops.size()) {
-                copySteps(steps, stepsPreview);
+                // In overdub mode (0), start with existing steps; in replace mode (1), start fresh
+                if (recordMode.get() == 0) {
+                    copySteps(steps, stepsPreview);
+                }
 
                 // Copy new recorded loop
                 std::vector<RecordedNote>& loop = recordedLoops[index];
@@ -238,6 +241,24 @@ public:
         p.val.props().unit = playingSteps->size() > 0 ? std::to_string((int)playingSteps->size()) + " steps" : "";
     });
 
+    /*md - `QUANTIZE_RECORD` enable/disable quantization when recording. When enabled, note start positions will snap to the nearest step. */
+    Val& quantizeRecord = val(1.0f, "QUANTIZE_RECORD", { "Quantize", VALUE_STRING, .max = 1 }, [&](auto p) {
+        p.val.setFloat(p.value);
+        p.val.setString(p.value == 0 ? "off" : "on");
+    });
+
+    /*md - `RECORD_ARM` arm/disarm recording. When armed, notes will be recorded when playing. Default: off (0) */
+    Val& recordArm = val(0.0f, "RECORD_ARM", { "Rec Arm", VALUE_STRING, .max = 1 }, [&](auto p) {
+        p.val.setFloat(p.value);
+        p.val.setString(p.value == 0 ? "off" : "armed");
+    });
+
+    /*md - `RECORD_MODE` set recording mode: 0=overdub (add to existing), 1=replace (clear and replace). Default: overdub */
+    Val& recordMode = val(0.0f, "RECORD_MODE", { "Rec Mode", VALUE_STRING, .max = 1 }, [&](auto p) {
+        p.val.setFloat(p.value);
+        p.val.setString(p.value == 0 ? "overdub" : "replace");
+    });
+
     Sequencer(AudioPlugin::Props& props, AudioPlugin::Config& config)
         : Mapping(props, config)
         , props(props)
@@ -251,7 +272,10 @@ public:
         }
 
         //md - `"defaultStepCount": 32` set the number of steps
-        stepCountVal.setFloat(config.json.value("defaultStepCount", DEFAULT_MAX_STEPS));
+        uint16_t configStepCount = config.json.value("defaultStepCount", DEFAULT_MAX_STEPS);
+        logDebug("Sequencer track %d: setting stepCount to %d (from config defaultStepCount)", track, configStepCount);
+        stepCountVal.set(configStepCount);  // Use set() to trigger the callback that updates stepCount
+        logDebug("Sequencer track %d: after set, stepCount=%d stepCountVal=%d", track, stepCount, (int)stepCountVal.get());
 
         //md - `"recordingEnabled": true` if true, noteOn/noteOff will be recorded
         recordingEnabled = config.json.value("recordingEnabled", recordingEnabled);
@@ -302,7 +326,7 @@ public:
         if (userdata != NULL) {
             props.audioPluginHandler->noteOn(note, velocity, { track, targetPlugin });
 
-            if (!isPlaying || !recordingEnabled)
+            if (!isPlaying || !recordingEnabled || recordArm.get() == 0)
                 return;
 
             bool record = (bool)userdata;
@@ -314,10 +338,18 @@ public:
                 }
 
                 // store active note with current absolute loop and step
+                // Apply quantization if enabled - snap to nearest step
+                uint16_t quantizedStep = stepCounter;
+                if (quantizeRecord.get() > 0) {
+                    // Already at step boundary, no change needed
+                    // stepCounter is always 0..stepCount-1
+                    quantizedStep = stepCounter;
+                }
+
                 ActiveNote an;
                 an.note = note;
                 an.startLoop = loopCounter;
-                an.startStep = stepCounter;
+                an.startStep = quantizedStep;
                 an.velocity = velocity;
                 activeNotes[note] = an;
             }
@@ -329,7 +361,7 @@ public:
         if (userdata != NULL) {
             props.audioPluginHandler->noteOff(note, 0, { track, targetPlugin });
 
-            if (!isPlaying || !recordingEnabled)
+            if (!isPlaying || !recordingEnabled || recordArm.get() == 0)
                 return;
 
             bool record = (bool)userdata;
@@ -434,7 +466,10 @@ public:
         }
     }
 
-    DataFn dataFunctions[7] = {
+    // Helper to get recorded loops count
+    size_t recordedLoopsCount = 0;
+
+    DataFn dataFunctions[11] = {
         { "STEPS", [this](void* userdata) {
              return &steps;
          } },
@@ -466,6 +501,19 @@ public:
              steps.clear();
              logDebug("Cleared steps");
              return (void*)NULL;
+         } },
+        { "LOOP_COUNTER", [this](void* userdata) {
+             return &loopCounter;
+         } },
+        { "RECORDED_LOOPS_COUNT", [this](void* userdata) {
+             recordedLoopsCount = recordedLoops.size();
+             return &recordedLoopsCount;
+         } },
+        { "RECORDING_ENABLED", [this](void* userdata) {
+             return &recordingEnabled;
+         } },
+        { "RECORD_ARM_PTR", [this](void* userdata) {
+             return &recordArm;
          } }
     };
     DEFINE_GETDATAID_AND_DATA

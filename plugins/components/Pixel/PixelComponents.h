@@ -75,6 +75,7 @@ void loadPixelComponents()
 #include "./SampleComponent.h"
 #include "./SeqBarComponent.h"
 #include "./SeqProgressBarComponent.h"
+#include "./SeqRecordStatusComponent.h"
 #include "./SeqSynthBarComponent.h"
 #include "./SpectrogramComponent.h"
 #include "./StepEdit2Component.h"
@@ -154,6 +155,10 @@ void loadPixelComponents()
 
     viewManager.plugins.push_back({ "SeqProgressBar", [](ComponentInterface::Props props) {
                                        return new SeqProgressBarComponent(props);
+                                   } });
+
+    viewManager.plugins.push_back({ "SeqRecordStatus", [](ComponentInterface::Props props) {
+                                       return new SeqRecordStatusComponent(props);
                                    } });
 
     viewManager.plugins.push_back({ "Value", [](ComponentInterface::Props props) {

@@ -150,11 +150,14 @@ public:
     {
         Engine::noteOn(note, _velocity);
         velocity = _velocity;
-        // Random phase initialization to avoid click transients
-        sampleIndexCar = (float)rand() / RAND_MAX;
-        sampleIndexMod = (float)rand() / RAND_MAX;
-        sampleIndexLfo = 0.0f;
-        envPitch.reset(props.sampleRate * 0.2f); // 200ms pitch decay
+        // Safe legato: only randomize/reset phases or pitch envelope when the amp envelope is silent
+        if (envelopAmp.get() <= 0.0f) {
+            // Random phase initialization to avoid click transients for a fresh note
+            sampleIndexCar = (float)rand() / RAND_MAX;
+            sampleIndexMod = (float)rand() / RAND_MAX;
+            sampleIndexLfo = 0.0f;
+            envPitch.reset(props.sampleRate * 0.2f); // 200ms pitch decay
+        }
         setBaseFreq(body.get(), note);
     }
 };
