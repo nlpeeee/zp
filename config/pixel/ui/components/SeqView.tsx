@@ -6,6 +6,7 @@ import { SequencerCard } from '@/libs/nativeComponents/SequencerCard';
 import { SequencerValue } from '@/libs/nativeComponents/SequencerValue';
 import { Text } from '@/libs/nativeComponents/Text';
 import { Value } from '@/libs/nativeComponents/Value';
+import { KnobAction } from '@/libs/nativeComponents/KnobAction';
 import { rgb } from '@/libs/ui';
 import {
     A1,
@@ -35,6 +36,7 @@ import {
     enc5Seq,
     enc6Seq,
     enc7Seq,
+    enc8Seq,
     seqTop,
 } from '../constantsValue';
 import { Layout } from './Layout';
@@ -263,6 +265,8 @@ export function SeqView({ name, track, synthName, color, contextId, title, inclu
                         track={track}
                         param="STEP_COUNT"
                         label="Steps"
+                        fontValue={'PoppinsLight_16'}
+                        fontLabel={'PoppinsLight_12'}
                         encoderId={enc3Seq.encoderId}
                         barHeight={2}
                         barColor="primary"
@@ -284,6 +288,24 @@ export function SeqView({ name, track, synthName, color, contextId, title, inclu
                             visibilityContext={row2}
                         />
                     )}
+                    <Value
+                        bounds={[enc8Seq.bounds[0], enc8Seq.bounds[1], enc8Seq.bounds[2], enc8Seq.bounds[3]]}
+                        audioPlugin={`Sequencer`}
+                        track={track}
+                        param="OCTAVE_SHIFT"
+                        label="Oct"
+                        fontValue={'PoppinsLight_16'}
+                        fontLabel={'PoppinsLight_12'}
+                        barHeight={0}
+                        showLabelOverValue={2}
+                        visibilityContext={row2}
+                    />
+                    <KnobAction
+                        encoderId={enc4Seq.encoderId}
+                        actionRight={`data:Sequencer:${track}:OCTAVE_UP`}
+                        actionLeft={`data:Sequencer:${track}:OCTAVE_DOWN`}
+                        visibilityContext={row2}
+                    />
 
                     <Text
                         text="&icon::arrowUp::filled"

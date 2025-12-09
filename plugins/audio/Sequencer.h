@@ -74,6 +74,7 @@ protected:
     uint16_t stepCounter = 0;
     bool isPlaying = false;
     uint16_t loopCounter = 0;
+    int8_t octaveShift = 0;
 
     AudioPlugin* targetPlugin = NULL;
 
@@ -174,6 +175,9 @@ public:
         p.val.setFloat(p.value);
         stepCount = p.val.get();
      });
+
+    /*md - `OCTAVE_SHIFT` tracks the cumulative octave shift applied to all steps */
+    Val& octaveShiftVal = val(0.0f, "OCTAVE_SHIFT", { "Oct", VALUE_CENTERED, -10.0f, 10.0f });
 
     // in 4/4 time signature
     // 92 tick = 1 note = 1 bar
@@ -469,7 +473,32 @@ public:
     // Helper to get recorded loops count
     size_t recordedLoopsCount = 0;
 
-    DataFn dataFunctions[11] = {
+    void shiftOctave(int delta)
+    {
+        int semitones = delta * 12;
+        octaveShift += delta;
+        octaveShiftVal.set((float)octaveShift);
+        
+        for (auto& s : steps) {
+            int newNote = (int)s.note + semitones;
+            newNote = std::max(0, std::min(127, newNote));
+            s.note = (uint8_t)newNote;
+        }
+        for (auto& s : stepsPreview) {
+            int newNote = (int)s.note + semitones;
+            newNote = std::max(0, std::min(127, newNote));
+            s.note = (uint8_t)newNote;
+        }
+        for (auto& loop : recordedLoops) {
+            for (auto& n : loop) {
+                int newNote = (int)n.note + semitones;
+                newNote = std::max(0, std::min(127, newNote));
+                n.note = (uint8_t)newNote;
+            }
+        }
+    }
+
+    DataFn dataFunctions[14] = {
         { "STEPS", [this](void* userdata) {
              return &steps;
          } },
@@ -514,7 +543,18 @@ public:
          } },
         { "RECORD_ARM_PTR", [this](void* userdata) {
              return &recordArm;
-         } }
+            } },
+        { "OCTAVE_UP", [this](void* userdata) {
+            shiftOctave(1);
+            return (void*)NULL;
+        } },
+        { "OCTAVE_DOWN", [this](void* userdata) {
+            shiftOctave(-1);
+            return (void*)NULL;
+        } },
+        { "OCTAVE_SHIFT", [this](void* userdata) {
+            return &octaveShift;
+        } }
     };
     DEFINE_GETDATAID_AND_DATA
 

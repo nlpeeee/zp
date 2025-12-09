@@ -123,8 +123,8 @@ public:
         
         if (useDirectionActions) {
             // Direction-based actions
-            logDebug("KnobAction direction action: dir=%d rightAction=%p leftAction=%p",
-                     direction, (void*)fakeKeymapRight.action, (void*)fakeKeymapLeft.action);
+            logDebug("KnobAction direction action: dir=%d hasRight=%d hasLeft=%d",
+                     direction, (bool)fakeKeymapRight.action, (bool)fakeKeymapLeft.action);
             if (direction > 0 && fakeKeymapRight.action != nullptr) {
                 logDebug("KnobAction: executing RIGHT action");
                 fakeKeymapRight.action(fakeKeymapRight);
